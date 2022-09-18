@@ -8,10 +8,11 @@
 #define LIST_CONNECTER 4
 #define SEND 5
 #define EXIT 6
+#define MAX_CONN 5//max connection
 typedef struct package PACKAGE;
 struct package{
     int type;
     int message_len;
-    char buf[128];
+    char buf[256];
 };
 #endif
