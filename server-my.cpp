@@ -170,6 +170,14 @@ int main()
 							memcpy(&package.buf,"client: good bye!\n",package.message_len);
 							send(comfd, (char *)&package, sizeof(package), BLOCK);
 							close(comfd);
+							for(int i=0;i<MAX_CONN;i++)
+							{
+								if(clientlist[i].connfd==comfd)
+								{
+									memset((void*)&clientlist[i],0,sizeof(struct info));
+									break;
+								}
+							}
 						}
 						return 0;
 					default:
@@ -185,7 +193,6 @@ int main()
 	printf("client %s:%d has been disconnected with process %d\n", inet_ntoa(clientAddr.sin_addr), ntohs(clientAddr.sin_port), getpid());
 	wait(0);
 	close(sockfd);
-	
 	return 0;
 }
 
@@ -264,10 +271,12 @@ void send_msg(int fd,PACKAGE* sent)
 	port=strsep(&str,deli);
 	data=strsep(&str,deli);
 	int i=0;
+	int destination=0;
 	for(;i<MAX_CONN;i++)
 	{
 		if(strcmp(ip,clientlist[i].sin_addr)==0 && atoi(port)==clientlist[i].sin_port)
 		{
+			destination=clientlist[i].connfd;
 			break;
 		}
 	}
@@ -276,11 +285,23 @@ void send_msg(int fd,PACKAGE* sent)
 		char tmp[]="client does not exist!";
 		strcpy(info.buf,tmp);
 		info.message_len=strlen(tmp);
+		send(fd,(void*)&info,sizeof(PACKAGE),BLOCK);
+		return;
 	}
 	else{
 		char tmp[]="send success!";
 		strcpy(info.buf,tmp);
 		info.message_len=strlen(tmp);
 	}
-	
+	PACKAGE infosend;
+	infosend.type=SEND;
+	strcpy(infosend.buf,data);
+	infosend.message_len=strlen(data);
+	if(send(destination,(void*)&infosend,sizeof(PACKAGE),BLOCK)<0)
+	{
+		char tmp[]="send fail!";
+		strcpy(infosend.buf,tmp);
+		infosend.message_len=strlen(tmp);
+	}
+	send(fd,(void*)&info,sizeof(PACKAGE),BLOCK);
 }
