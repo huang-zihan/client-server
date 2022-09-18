@@ -4,6 +4,7 @@
  */
 
 #include <stdio.h>
+#include<stdlib.h>
 #include <errno.h>
 #include <string.h>
 #include <sys/types.h>
@@ -24,22 +25,26 @@
 
 extern int errno;
 
-
-struct student
+struct info
 {
-	char name[32];
-	int age;
+	int sin_port;
+	char sin_addr[20];
+	int connfd;
 };
+typedef struct info info;
+info clientlist[MAX_CONN];
 
 void show_time(int);
+void show_name(int);
+void list_connecter(int);
+void send_msg(int,PACKAGE*);
+
 int main()
 {	
 	int sockfd, comfd;
 	struct sockaddr_in serverAddr, clientAddr;
 	int ret, iClientSize;
-	struct student stu;
 	void *ptr;
-	
 	// 
 	if((sockfd = socket(AF_INET, SOCK_STREAM, 0)) == -1)
 	{
@@ -51,6 +56,7 @@ int main()
 	serverAddr.sin_family = AF_INET;
 	serverAddr.sin_port = htons(SERVER_PORT);
 	serverAddr.sin_addr.s_addr = htonl(INADDR_ANY);
+	memset((void*)clientlist,0,MAX_CONN*sizeof(struct info));
 
 	bzero(&(serverAddr.sin_zero), 8);
 	if(bind(sockfd, (struct sockaddr *)&serverAddr, sizeof(serverAddr)) == -1)
@@ -61,7 +67,7 @@ int main()
 	}
 		
 	//
-	if(listen(sockfd, 5) == -1)
+	if(listen(sockfd, MAX_CONN) == -1)
 	{
 		printf("listen() failed! code:%d\n", errno);
 		close(sockfd);
@@ -76,17 +82,26 @@ int main()
 		iClientSize = sizeof(struct sockaddr_in);
 		if((comfd = accept(sockfd, (struct sockaddr *)&clientAddr,(socklen_t *) &iClientSize)) == -1)
 		{
-			printf("accept() failed! code:%d\n", errno);
-			close(sockfd);
-			return -1;
+			continue;//循环调用accept（）直至返回有效句柄
 		}
 		printf("Accepted client: %s:%d\n", inet_ntoa(clientAddr.sin_addr), ntohs(clientAddr.sin_port));
-		
+		int i;
+		for(i=0;i<MAX_CONN;i++)
+		{
+			if(clientlist[i].connfd==0)
+			{
+				break;
+			}
+		}
+		clientlist[i].connfd=comfd;
+		strcpy(clientlist[i].sin_addr,inet_ntoa(clientAddr.sin_addr));
+		clientlist[i].sin_port=clientAddr.sin_port;
 		if(fork()==0){
 			// the child continue to connect server
 			int connect_flag=1;
 			send(comfd, "client: hello!\n", 16, BLOCK);
 			PACKAGE package;
+			memset((void*)&package,0,sizeof(PACKAGE));
 			while(connect_flag){
 				ret = recv(comfd, &package.type, sizeof(package.type), BLOCK);
 				// printf("1\n");
@@ -102,6 +117,7 @@ int main()
 					close(comfd);
 					return -1;
 				}
+				
 				// printf("%d\n",package.type);
 				if(package.type==DISCONNECT){
 					package.message_len=19;
@@ -109,7 +125,14 @@ int main()
 					send(comfd, (char *)&package, sizeof(package), BLOCK);
 					close(comfd);
 					connect_flag=0;
-					break;
+					for(int i=0;i<MAX_CONN;i++)
+					{
+						if(clientlist[i].connfd==comfd)
+						{
+							memset((void*)&clientlist[i],0,sizeof(struct info));
+							break;
+						}
+					}
 				}
 
 				int nLeft = package.message_len;
@@ -131,6 +154,24 @@ int main()
 					case GET_TIME:
 						show_time(comfd);
 						break;
+					case GET_NAME:
+						show_name(comfd);
+						break;
+					case LIST_CONNECTER:
+						list_connecter(comfd);
+						break;
+					case SEND:
+						send_msg(comfd,&package);
+						break;
+					case EXIT:
+						if(connect_flag)
+						{
+							package.message_len=19;
+							memcpy(&package.buf,"client: good bye!\n",package.message_len);
+							send(comfd, (char *)&package, sizeof(package), BLOCK);
+							close(comfd);
+						}
+						return 0;
 					default:
 						break;	
 				}
@@ -153,7 +194,6 @@ void show_time(int fd){
 	struct tm* tblk;
 	PACKAGE info;
 	int *pbuf = (int *)info.buf;
-
 	time(&timer);
 	tblk = gmtime(&timer);
 	info.type = GET_TIME;
@@ -169,4 +209,78 @@ void show_time(int fd){
 	send(fd,&info.type,sizeof(info.type),BLOCK);
 	send(fd,&info.message_len,sizeof(info.message_len),BLOCK);
 	send(fd,&info.buf,info.message_len,BLOCK);
+}
+void show_name(int fd)
+{
+	char buf[128];
+	PACKAGE info;
+	info.type=GET_NAME;
+	gethostname(buf,sizeof(buf));
+	strcpy(info.buf,buf);
+	info.message_len=strlen(buf);
+	send(fd,&info.type,sizeof(info.type),BLOCK);
+	send(fd,&info.message_len,sizeof(info.message_len),BLOCK);
+	send(fd,&info.buf,info.message_len,BLOCK);
+}
+void list_connecter(int fd)
+{
+	PACKAGE info;
+	info.type=LIST_CONNECTER;
+	char buf[256];
+	char* ptr=buf;
+	for(int i=0;i<MAX_CONN;i++)
+	{
+		if(clientlist[i].connfd)
+		{
+			*(int*)ptr=clientlist[i].connfd;
+			ptr+=sizeof(int);
+			*ptr=':';
+			ptr++;
+			strcpy(ptr,clientlist[i].sin_addr);//末尾出现'\0'
+			ptr+=sizeof(clientlist[i].sin_addr);//指针移至'\0'处
+			*ptr=':';//消除'\0'，防止strlen检测错误
+			ptr++;
+			*(int*)ptr=clientlist[i].sin_port;
+			ptr+=sizeof(int);
+			*ptr=' ';//两个客户端信息的间隔符
+			ptr++;
+		}
+	}
+	*ptr='\0';//结束标志
+	strcpy(info.buf,buf);
+	info.message_len=strlen(buf);
+	send(fd,&info.type,sizeof(info.type),BLOCK);
+	send(fd,&info.message_len,sizeof(info.message_len),BLOCK);
+	send(fd,&info.buf,info.message_len,BLOCK);
+}
+void send_msg(int fd,PACKAGE* sent)
+{
+	PACKAGE info;
+	info.type=SEND;
+	char* str=sent->buf;
+	char* ip,*port,*data;
+	char* deli=":";
+	ip=strsep(&str,deli);
+	port=strsep(&str,deli);
+	data=strsep(&str,deli);
+	int i=0;
+	for(;i<MAX_CONN;i++)
+	{
+		if(strcmp(ip,clientlist[i].sin_addr)==0 && atoi(port)==clientlist[i].sin_port)
+		{
+			break;
+		}
+	}
+	if(i==MAX_CONN)
+	{
+		char tmp[]="client does not exist!";
+		strcpy(info.buf,tmp);
+		info.message_len=strlen(tmp);
+	}
+	else{
+		char tmp[]="send success!";
+		strcpy(info.buf,tmp);
+		info.message_len=strlen(tmp);
+	}
+	
 }
