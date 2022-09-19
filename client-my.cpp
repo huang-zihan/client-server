@@ -15,15 +15,32 @@
 #include <unistd.h>
 
 #include <sys/wait.h>
-#include <string.h>
 #include <stddef.h>
 #include <time.h>
 #include "def.h"
 
+// menu ctrl
+#include <termios.h>
+#include <unistd.h>
+#include <iostream>
+
 #define SERVER_PORT	4436 
 #define BLOCK 0
 
+using namespace std;
+
 extern int errno;
+
+const char* menu[7]={
+	"CONNECT",
+	"DISCONNECT",
+	"GET_TIME",
+	"GET_NAME",
+	"LIST_CONNECTER",
+	"SEND",
+	"EXIT"
+};
+
 
 char buf[128];
 
@@ -40,14 +57,8 @@ int main(int argc, char *argv[])
 	struct student stu;
 	
 	
-	// if(argc != 3)
-	// {
-	// 	printf("usage: informLinuxClient serverIP type\n");
-	// 	return -1;
-	// }
 	while(1){
 		int type;
-		
 		//connect to a server
 		if(!connect_flag){
 			char ip[20];
@@ -56,6 +67,7 @@ int main(int argc, char *argv[])
 				printf("please input: 0(connect) server-ip port(%d) to connect first\n",SERVER_PORT);
 				printf("or -1 to exit\n");
 				scanf("%d", &type);
+				// printf("%d",type);
 				if(type==-1){
 					printf("bye!\n");
 					exit(0);
@@ -87,13 +99,54 @@ int main(int argc, char *argv[])
 			// receive the welcome message
 			recv(sockfd, buf, 17, BLOCK);
 			printf("%s",buf);
+			getchar();
 		}
 		//after connected
 		else{
 			PACKAGE package;
-			printf("input function type:");
-			scanf("%d", &package.type);
 			package.message_len=0;
+			//******
+			// set terminal
+			static struct termios oldt, newt;
+			char ctrl_key[KEYLEN];
+			int user_choice=0;
+			tcgetattr( STDIN_FILENO, &oldt);
+			newt = oldt;
+			newt.c_lflag &= ~(ICANON);         // c_lflag 本地模式
+			tcsetattr( STDIN_FILENO, TCSANOW, &newt);
+			system("stty -echo");
+			int sum;
+			// system("clear");
+			printf("%s\n",menu_head);
+			do{
+				// cout <<"called"<< endl;
+				printf("%d		%s",user_choice, menu[user_choice]);
+				fflush(stdout);
+				read(0, &ctrl_key, 3);
+				sum=ctrl_key[0]+ctrl_key[1]+ctrl_key[2];
+				if(sum==UP){
+					// printf("up\n");
+					user_choice=(user_choice-1+7)%7;
+				}else if(sum==DOWN){
+					// printf("down\n");
+					user_choice=(user_choice+1)%7;
+				}else if(sum==LEFT){
+					// printf("left\n");
+				}else if(sum==RIGHT){
+					// printf("right\n");
+				}
+				// printf(" ");
+				memset(ctrl_key,0,KEYLEN);
+				printf("\r                              \r");
+				fflush(stdout);
+			}while(sum!=ENTER);
+			puts("");		
+			system("stty echo");
+			tcsetattr( STDIN_FILENO, TCSANOW, &oldt);
+			//******
+			// printf("input function type:");
+			// scanf("%d", &package.type);
+			package.type=user_choice;
 
 			switch(package.type){
 				case DISCONNECT:
@@ -134,3 +187,4 @@ int main(int argc, char *argv[])
 	
 	return 0;
 }
+

@@ -111,6 +111,7 @@ int main()
 					ret += recv(comfd, &package.buf, package.message_len,BLOCK);
 					// printf("3\n");
 				}
+				// printf("%d  %lu\n",ret, sizeof(package.type)+sizeof(package.message_len)+package.message_len);
 				if(ret != sizeof(package.type)+sizeof(package.message_len)+package.message_len){
 					printf("recv() failed!\n");
 					close(sockfd);
@@ -127,12 +128,14 @@ int main()
 					connect_flag=0;
 					for(int i=0;i<MAX_CONN;i++)
 					{
+						// printf("%d %d",clientlist[i].connfd, comfd);
 						if(clientlist[i].connfd==comfd)
 						{
 							memset((void*)&clientlist[i],0,sizeof(struct info));
-							break;
+							break; //break for
 						}
 					}
+					break;// break while loop as disconnect
 				}
 
 				int nLeft = package.message_len;
@@ -141,6 +144,7 @@ int main()
 					ret = recv(comfd, ptr, nLeft, 0);
 					if(ret <= 0)
 					{
+						printf("145\n");
 						printf("recv() failed!\n");
 						close(sockfd);
 						close(comfd);
@@ -266,7 +270,7 @@ void send_msg(int fd,PACKAGE* sent)
 	info.type=SEND;
 	char* str=sent->buf;
 	char* ip,*port,*data;
-	char* deli=":";
+	const char* deli=":";
 	ip=strsep(&str,deli);
 	port=strsep(&str,deli);
 	data=strsep(&str,deli);

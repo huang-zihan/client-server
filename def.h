@@ -9,10 +9,23 @@
 #define SEND 5
 #define EXIT 6
 #define MAX_CONN 5//max connection
+
+// kbd ctrl
+#define     ESC     27
+#define     UP      183
+#define     DOWN    184
+#define     LEFT    186
+#define     RIGHT   185
+#define     ENTER   10
+#define     KEYLEN  3
+
 typedef struct package PACKAGE;
 struct package{
     int type;
     int message_len;
     char buf[256];
 };
+
+const char* menu_head="+--------------------+\n|       menu         |\n+--------------------+";
 #endif
+
