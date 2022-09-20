@@ -44,18 +44,11 @@ const char* menu[7]={
 
 char buf[128];
 
-struct student
-{
-	char name[32];
-	int age;
-};
 
 int main(int argc, char *argv[])
 {	
 	int sockfd, connect_flag=0;
 	struct sockaddr_in serverAddr;
-	struct student stu;
-	
 	
 	while(1){
 		int type;
@@ -150,7 +143,17 @@ int main(int argc, char *argv[])
 
 			switch(package.type){
 				case DISCONNECT:
-				case GET_TIME: break;
+				case GET_NAME:
+				case LIST_CONNECTER:
+				case EXIT:
+				case GET_TIME:
+					strcpy(package.buf,"\0");//包的内容设置为空
+					package.message_len=0; 
+					break;
+				case SEND:
+					scanf("%s",package.buf);
+					package.message_len=strlen(package.buf);
+					break;
 				default: break;
 			}
 
@@ -180,6 +183,41 @@ int main(int argc, char *argv[])
 					int *pbuf=(int *)package.buf;
 					printf("client: time:%d-%d-%d %d:%d:%d\n", *pbuf, *(pbuf+1), *(pbuf+2), *(pbuf+3), *(pbuf+4), *(pbuf+5));
 					break;
+				case GET_NAME:
+					printf("client : name:%s\n",package.buf);
+					break;
+				case LIST_CONNECTER:
+					if(package.message_len==0) break;
+					char* tmp=package.buf;
+					while(tmp)
+					{
+						int connfd=*(int*)tmp;
+						tmp+=sizeof(int);
+						tmp+=sizeof(char);
+						char sin_addr[20];
+						int cnt=0;
+						while(*tmp!=':')
+						{
+							sin_addr[cnt++]=*tmp;
+							tmp++;
+						}
+						sin_addr[cnt]='\0';
+						int port=*(int*)tmp;
+						tmp+=sizeof(int);
+						tmp+=sizeof(char);
+						printf("client : connfd:%d sin_addr:%s port:%d\n",connfd,sin_addr,port);
+					}
+					break;
+				case SEND_BACK:
+					printf("client: send status:%s\n",package.buf);
+					break;
+				case SEND:
+					printf("client: receive data:%s\n",package.buf);
+					break;
+				case EXIT:
+					printf("%s",package.buf);
+					exit(0);
+					break;
 			}
 			// close(sockfd); //
 		}
@@ -187,4 +225,3 @@ int main(int argc, char *argv[])
 	
 	return 0;
 }
-
