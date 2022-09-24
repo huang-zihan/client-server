@@ -20,10 +20,20 @@
 #include <time.h>
 #include "def.h"
 
+#include <pthread.h>
+
 #define SERVER_PORT	4436 // port
 #define BLOCK 0
 
 extern int errno;
+
+typedef struct thread_arg thread_arg;
+struct thread_arg{
+	int comfd;
+	int sockfd;
+	struct sockaddr_in clientAddr;
+};
+
 
 static info clientlist[MAX_CONN];
 
@@ -31,13 +41,14 @@ void show_time(int);
 void show_name(int);
 void list_connecter(int);
 void send_msg(int,PACKAGE*);
-
+void* thread_work(void *arg);
 int main()
 {	
 	int sockfd, comfd;
 	struct sockaddr_in serverAddr, clientAddr;
-	int ret, iClientSize;
-	void *ptr;
+	int iClientSize;
+	thread_arg new_arg;
+	// void *ptr; int ret;
 	// 
 	if((sockfd = socket(AF_INET, SOCK_STREAM, 0)) == -1)
 	{
@@ -89,106 +100,13 @@ int main()
 		clientlist[i].connfd=comfd;
 		strcpy(clientlist[i].sin_addr,inet_ntoa(clientAddr.sin_addr));
 		clientlist[i].sin_port=clientAddr.sin_port;
-		if(fork()==0){
-			// the child continue to connect server
-			int connect_flag=1;
-			send(comfd, "client: hello!\n", 16, BLOCK);
-			PACKAGE package;
-			memset((void*)&package,0,sizeof(PACKAGE));
-			while(connect_flag){
-				ret = recv(comfd, &package.type, sizeof(package.type), BLOCK);
-				// printf("1\n");
-				ret += recv(comfd, &package.message_len, sizeof(package.message_len), BLOCK);
-				// printf("2\n%d",package.message_len);
-				if(package.message_len>0){
-					ret += recv(comfd, &package.buf, package.message_len,BLOCK);
-					// printf("3\n");
-				}
-				// printf("%d  %lu\n",ret, sizeof(package.type)+sizeof(package.message_len)+package.message_len);
-				if(ret != sizeof(package.type)+sizeof(package.message_len)+package.message_len){
-					printf("recv() failed!\n");
-					close(sockfd);
-					close(comfd);
-					return -1;
-				}
-				
-				// printf("%d\n",package.type);
-				if(package.type==DISCONNECT){
-					package.message_len=19;
-					memcpy(&package.buf,"client: good bye!\n",package.message_len);
-					send(comfd, (char *)&package, sizeof(package), BLOCK);
-					close(comfd);
-					connect_flag=0;
-					for(int i=0;i<MAX_CONN;i++)
-					{
-						// printf("%d %d",clientlist[i].connfd, comfd);
-						if(clientlist[i].connfd==comfd)
-						{
-							memset((void*)&clientlist[i],0,sizeof(struct info));
-							break; //break for
-						}
-					}
-					break;// break while loop as disconnect
-				}
 
-				int nLeft = package.message_len;
-				while(nLeft > 0)
-				{
-					ret = recv(comfd, ptr, nLeft, 0);
-					if(ret <= 0)
-					{
-						printf("145\n");
-						printf("recv() failed!\n");
-						close(sockfd);
-						close(comfd);
-						return -1;
-					}
-					nLeft -= ret;
-					ptr = (char *)ptr + ret;
-				}
-				// response
-				switch (package.type){
-					case GET_TIME:
-						show_time(comfd);
-						break;
-					case GET_NAME:
-						show_name(comfd);
-						break;
-					case LIST_CONNECTER:
-						list_connecter(comfd);
-						break;
-					case SEND:
-						send_msg(comfd,&package);
-						break;
-					case EXIT:
-						if(connect_flag)
-						{
-							package.message_len=19;
-							memcpy(&package.buf,"client: good bye!\n",package.message_len);
-							send(comfd, (char *)&package, sizeof(package), BLOCK);
-							close(comfd);
-							for(int i=0;i<MAX_CONN;i++)
-							{
-								if(clientlist[i].connfd==comfd)
-								{
-									memset((void*)&clientlist[i],0,sizeof(struct info));
-									break;
-								}
-							}
-						}
-						return 0;
-					default:
-						break;	
-				}
-			}
-			if(!connect_flag){
-				close(comfd);
-				break;
-			}
-		}
+		pthread_t tid;
+		new_arg.comfd=comfd;
+		new_arg.sockfd=sockfd;
+		new_arg.clientAddr=clientAddr;
+		pthread_create(&tid, NULL, thread_work, &new_arg);
 	}
-	printf("client %s:%d has been disconnected with process %d\n", inet_ntoa(clientAddr.sin_addr), ntohs(clientAddr.sin_port), getpid());
-	wait(0);
 	close(sockfd);
 	return 0;
 }
@@ -208,7 +126,6 @@ void show_time(int fd){
 	*(pbuf++) = tblk->tm_min;
 	*(pbuf++) = tblk->tm_sec;
 	pbuf-=6;
-	// printf("client: time:%d year, %d day, %d:%d:%d\n", *(int*)info.buf, *((int*)info.buf+1), *((int*)info.buf+2), *((int*)info.buf+3), *((int*)info.buf+4));
 	info.message_len=6*sizeof(int);
 	send(fd,&info.type,sizeof(info.type),BLOCK);
 	send(fd,&info.message_len,sizeof(info.message_len),BLOCK);
@@ -233,7 +150,6 @@ void list_connecter(int fd)
 	char* ptr=info.buf;
 	int connect_num=0;
 	int message_len=0;
-	printf("called!!\n");
 	
 	for(int i=0;i<MAX_CONN;i++)
 		if(clientlist[i].connfd) connect_num++;
@@ -251,13 +167,10 @@ void list_connecter(int fd)
 			*ptr=':';
 			ptr++;
 			message_len++;
-			strcpy(ptr,clientlist[i].sin_addr);//末尾出现'\0'
-			ptr+=strlen(clientlist[i].sin_addr) + 1;//指针移至'\0'处
+			strcpy(ptr,clientlist[i].sin_addr);
+			ptr+=strlen(clientlist[i].sin_addr) + 1;
 			message_len += strlen(clientlist[i].sin_addr) + 1;
-			// *ptr=':';//消除'\0'，防止strlen检测错误
-			// ptr++;
 			*(int*)ptr=clientlist[i].sin_port;
-			printf("%d\n",clientlist[i].sin_port);
 			ptr+=sizeof(int);
 			message_len+=sizeof(int);
 		}
@@ -312,4 +225,105 @@ void send_msg(int fd,PACKAGE* sent)
 		infosend.message_len=strlen(tmp);
 	}
 	send(fd,(void*)&info,sizeof(PACKAGE),BLOCK);
+}
+
+
+void* thread_work(void *arg){
+	// the child continue to connect server
+	int ret;
+	void *ptr;
+	int connect_flag=1;
+	thread_arg* pthreadargs=(thread_arg*)arg;
+	int comfd=pthreadargs->comfd, sockfd=pthreadargs->sockfd;
+	struct sockaddr_in clientAddr = pthreadargs->clientAddr;
+	int ret_value=0;
+	send(comfd, "client: hello!\n", 16, BLOCK);
+	PACKAGE package;
+	memset((void*)&package,0,sizeof(PACKAGE));
+	while(connect_flag){
+		ret = recv(comfd, &package.type, sizeof(package.type), BLOCK);
+		ret += recv(comfd, &package.message_len, sizeof(package.message_len), BLOCK);
+		if(package.message_len>0){
+			ret += recv(comfd, &package.buf, package.message_len,BLOCK);
+		}
+		if(ret != sizeof(package.type)+sizeof(package.message_len)+package.message_len){
+			printf("recv() failed!\n");
+			close(sockfd);
+			close(comfd);
+			ret_value=-1;
+			return NULL;
+		}
+		
+		if(package.type==DISCONNECT){
+			package.message_len=19;
+			memcpy(&package.buf,"client: good bye!\n",package.message_len);
+			send(comfd, (char *)&package, sizeof(package), BLOCK);
+			close(comfd);
+			connect_flag=0;
+			for(int i=0;i<MAX_CONN;i++)
+			{
+				if(clientlist[i].connfd==comfd)
+				{
+					memset((void*)&clientlist[i],0,sizeof(struct info));
+					break; //break for
+				}
+			}
+			break;// break while loop as disconnect
+		}
+
+		int nLeft = package.message_len;
+		while(nLeft > 0)
+		{
+			ret = recv(comfd, ptr, nLeft, 0);
+			if(ret <= 0)
+			{
+				printf("145\n");
+				printf("recv() failed!\n");
+				close(sockfd);
+				close(comfd);
+				ret_value=-1;
+				// return -1; err
+				return NULL;
+			}
+			nLeft -= ret;
+			ptr = (char *)ptr + ret;
+		}
+		// response
+		switch (package.type){
+			case GET_TIME:
+				show_time(comfd);
+				break;
+			case GET_NAME:
+				show_name(comfd);
+				break;
+			case LIST_CONNECTER:
+				list_connecter(comfd);
+				break;
+			case SEND:
+				send_msg(comfd,&package);
+				break;
+			case EXIT:
+				if(connect_flag)
+				{
+					package.message_len=19;
+					memcpy(&package.buf,"client: good bye!\n",package.message_len);
+					send(comfd, (char *)&package, sizeof(package), BLOCK);
+					close(comfd);
+					for(int i=0;i<MAX_CONN;i++)
+					{
+						if(clientlist[i].connfd==comfd)
+						{
+							memset((void*)&clientlist[i],0,sizeof(struct info));
+							break;
+						}
+					}
+				}
+				return NULL;
+			default:
+				break;
+		}
+	}
+	printf("client %s:%d has been disconnected with process %d\n", inet_ntoa(clientAddr.sin_addr), ntohs(clientAddr.sin_port), getpid());
+	close(comfd);
+	return NULL;
 }
