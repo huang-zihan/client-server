@@ -9,7 +9,7 @@
 #define SEND 5
 #define EXIT 6
 #define SEND_BACK 7 //send要回包给发送客户端，用于区别发送客户端和接收客户端
-#define MAX_CONN 5//max connection
+#define MAX_CONN 5 //max connection
 
 // kbd ctrl
 #define     ESC     27
@@ -26,6 +26,14 @@ struct package{
     int message_len;
     char buf[256];
 };
+
+struct info
+{
+	int sin_port;
+	char sin_addr[20];
+	int connfd;
+};
+typedef struct info info;
 
 const char* menu_head="+--------------------+\n|       menu         |\n+--------------------+";
 #endif

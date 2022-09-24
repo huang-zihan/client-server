@@ -179,35 +179,39 @@ int main(int argc, char *argv[])
 					printf("%s",package.buf);
 					connect_flag=0;
 					break;
-				case GET_TIME:
+				case GET_TIME:{
 					int *pbuf=(int *)package.buf;
 					printf("client: time:%d-%d-%d %d:%d:%d\n", *pbuf, *(pbuf+1), *(pbuf+2), *(pbuf+3), *(pbuf+4), *(pbuf+5));
 					break;
+				}
 				case GET_NAME:
 					printf("client : name:%s\n",package.buf);
 					break;
-				case LIST_CONNECTER:
+				case LIST_CONNECTER:{
+					printf("called!\n");
 					if(package.message_len==0) break;
 					char* tmp=package.buf;
-					while(tmp)
-					{
+
+					int num = *(int*)tmp;
+					tmp+=sizeof(int);
+					printf("num:%d\n",num);
+
+					for(int i=0;i<num;i++){
 						int connfd=*(int*)tmp;
 						tmp+=sizeof(int);
-						tmp+=sizeof(char);
 						char sin_addr[20];
 						int cnt=0;
-						while(*tmp!=':')
-						{
+						while(*(tmp++)!='\0'){
 							sin_addr[cnt++]=*tmp;
-							tmp++;
 						}
-						sin_addr[cnt]='\0';
+
 						int port=*(int*)tmp;
 						tmp+=sizeof(int);
-						tmp+=sizeof(char);
 						printf("client : connfd:%d sin_addr:%s port:%d\n",connfd,sin_addr,port);
 					}
+					
 					break;
+				}
 				case SEND_BACK:
 					printf("client: send status:%s\n",package.buf);
 					break;

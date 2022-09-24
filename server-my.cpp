@@ -25,14 +25,7 @@
 
 extern int errno;
 
-struct info
-{
-	int sin_port;
-	char sin_addr[20];
-	int connfd;
-};
-typedef struct info info;
-info clientlist[MAX_CONN];
+static info clientlist[MAX_CONN];
 
 void show_time(int);
 void show_name(int);
@@ -237,29 +230,40 @@ void list_connecter(int fd)
 {
 	PACKAGE info;
 	info.type=LIST_CONNECTER;
-	char buf[256];
-	char* ptr=buf;
+	char* ptr=info.buf;
+	int connect_num=0;
+	int message_len=0;
+	printf("called!!\n");
+	
+	for(int i=0;i<MAX_CONN;i++)
+		if(clientlist[i].connfd) connect_num++;
+	*(int*)ptr=connect_num;
+	ptr+=sizeof(int);
+	message_len+=sizeof(int);
+
 	for(int i=0;i<MAX_CONN;i++)
 	{
 		if(clientlist[i].connfd)
 		{
 			*(int*)ptr=clientlist[i].connfd;
 			ptr+=sizeof(int);
+			message_len+=sizeof(int);
 			*ptr=':';
 			ptr++;
+			message_len++;
 			strcpy(ptr,clientlist[i].sin_addr);//末尾出现'\0'
-			ptr+=sizeof(clientlist[i].sin_addr);//指针移至'\0'处
-			*ptr=':';//消除'\0'，防止strlen检测错误
-			ptr++;
+			ptr+=strlen(clientlist[i].sin_addr) + 1;//指针移至'\0'处
+			message_len += strlen(clientlist[i].sin_addr) + 1;
+			// *ptr=':';//消除'\0'，防止strlen检测错误
+			// ptr++;
 			*(int*)ptr=clientlist[i].sin_port;
+			printf("%d\n",clientlist[i].sin_port);
 			ptr+=sizeof(int);
-			*ptr=' ';//两个客户端信息的间隔符
-			ptr++;
+			message_len+=sizeof(int);
 		}
 	}
-	*ptr='\0';//结束标志
-	strcpy(info.buf,buf);
-	info.message_len=strlen(buf);
+	info.message_len=message_len;
+
 	send(fd,&info.type,sizeof(info.type),BLOCK);
 	send(fd,&info.message_len,sizeof(info.message_len),BLOCK);
 	send(fd,&info.buf,info.message_len,BLOCK);
