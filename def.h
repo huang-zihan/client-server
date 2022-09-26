@@ -8,7 +8,8 @@
 #define LIST_CONNECTER 4
 #define SEND 5
 #define EXIT 6
-#define SEND_BACK 7 //send要回包给发送客户端，用于区别发送客户端和接收客户端
+#define SEND_BACK 8 //send要回包给发送客户端，用于区别发送客户端和接收客户端
+#define RECV 7
 #define MAX_CONN 5 //max connection
 
 // kbd ctrl
@@ -20,6 +21,9 @@
 #define     ENTER   10
 #define     KEYLEN  3
 
+#define BLOCK 0
+#define NONEBLOCK 1
+
 typedef struct package PACKAGE;
 struct package{
     int type;
@@ -27,13 +31,19 @@ struct package{
     char buf[256];
 };
 
-struct info
-{
+typedef struct info info;
+struct info{
 	int sin_port;
 	char sin_addr[20];
 	int connfd;
 };
-typedef struct info info;
+
+typedef struct thread_arg thread_arg;
+struct thread_arg{
+	int comfd;
+	int sockfd;
+	struct sockaddr_in clientAddr;
+};
 
 const char* menu_head="+--------------------+\n|       menu         |\n+--------------------+";
 #endif

@@ -27,13 +27,6 @@
 
 extern int errno;
 
-typedef struct thread_arg thread_arg;
-struct thread_arg{
-	int comfd;
-	int sockfd;
-	struct sockaddr_in clientAddr;
-};
-
 
 static info clientlist[MAX_CONN];
 
@@ -105,6 +98,8 @@ int main()
 		new_arg.comfd=comfd;
 		new_arg.sockfd=sockfd;
 		new_arg.clientAddr=clientAddr;
+		printf("%d\n",ntohs(clientAddr.sin_port));
+		printf("%d\n",(clientAddr.sin_port));
 		pthread_create(&tid, NULL, thread_work, &new_arg);
 	}
 	close(sockfd);
@@ -191,6 +186,7 @@ void send_msg(int fd,PACKAGE* sent)
 	ip=strsep(&str,deli);
 	port=strsep(&str,deli);
 	data=strsep(&str,deli);
+	printf("%s %s %s",ip,port,data);
 	int i=0;
 	int destination=0;
 	for(;i<MAX_CONN;i++)
@@ -209,22 +205,28 @@ void send_msg(int fd,PACKAGE* sent)
 		send(fd,(void*)&info,sizeof(PACKAGE),BLOCK);
 		return;
 	}
-	else{
-		char tmp[]="send success!";
-		strcpy(info.buf,tmp);
-		info.message_len=strlen(tmp);
-	}
+
 	PACKAGE infosend;
 	infosend.type=SEND;
 	strcpy(infosend.buf,data);
 	infosend.message_len=strlen(data);
+	infosend.buf[infosend.message_len]=0;
+
+	PACKAGE ret_package;
+	ret_package.type=SEND;
+
 	if(send(destination,(void*)&infosend,sizeof(PACKAGE),BLOCK)<0)
 	{
 		char tmp[]="send fail!";
-		strcpy(infosend.buf,tmp);
-		infosend.message_len=strlen(tmp);
+		strcpy(ret_package.buf,tmp);
+		ret_package.message_len=strlen(tmp);
+	}else{
+		char tmp[]="send success!";
+		strcpy(ret_package.buf,tmp);
+		ret_package.message_len=strlen(tmp);
 	}
-	send(fd,(void*)&info,sizeof(PACKAGE),BLOCK);
+
+	send(fd,(void*)&ret_package,sizeof(PACKAGE),BLOCK);
 }
 
 
@@ -253,7 +255,9 @@ void* thread_work(void *arg){
 			ret_value=-1;
 			return NULL;
 		}
-		
+		// printf("recved!\n");
+		// printf("%d %d\n",package.type,package.message_len);
+		// printf("%s\n", package.buf);
 		if(package.type==DISCONNECT){
 			package.message_len=19;
 			memcpy(&package.buf,"client: good bye!\n",package.message_len);
@@ -271,24 +275,8 @@ void* thread_work(void *arg){
 			break;// break while loop as disconnect
 		}
 
-		int nLeft = package.message_len;
-		while(nLeft > 0)
-		{
-			ret = recv(comfd, ptr, nLeft, 0);
-			if(ret <= 0)
-			{
-				printf("145\n");
-				printf("recv() failed!\n");
-				close(sockfd);
-				close(comfd);
-				ret_value=-1;
-				// return -1; err
-				return NULL;
-			}
-			nLeft -= ret;
-			ptr = (char *)ptr + ret;
-		}
 		// response
+		printf("279\n");
 		switch (package.type){
 			case GET_TIME:
 				show_time(comfd);
@@ -300,6 +288,7 @@ void* thread_work(void *arg){
 				list_connecter(comfd);
 				break;
 			case SEND:
+				printf("!!\n");
 				send_msg(comfd,&package);
 				break;
 			case EXIT:

@@ -24,21 +24,25 @@
 #include <unistd.h>
 #include <iostream>
 
+#include <pthread.h>
+
+
 #define SERVER_PORT	4436 
-#define BLOCK 0
+
 
 using namespace std;
 
 extern int errno;
 
-const char* menu[7]={
+const char* menu[8]={
 	"CONNECT",
 	"DISCONNECT",
 	"GET_TIME",
 	"GET_NAME",
 	"LIST_CONNECTER",
 	"SEND",
-	"EXIT"
+	"EXIT",
+	"RECV"
 };
 
 
@@ -60,7 +64,6 @@ int main(int argc, char *argv[])
 				printf("please input: 0(connect) server-ip port(%d) to connect first\n",SERVER_PORT);
 				printf("or -1 to exit\n");
 				scanf("%d", &type);
-				// printf("%d",type);
 				if(type==-1){
 					printf("bye!\n");
 					exit(0);
@@ -109,26 +112,17 @@ int main(int argc, char *argv[])
 			tcsetattr( STDIN_FILENO, TCSANOW, &newt);
 			system("stty -echo");
 			int sum;
-			// system("clear");
 			printf("%s\n",menu_head);
 			do{
-				// cout <<"called"<< endl;
 				printf("%d		%s",user_choice, menu[user_choice]);
 				fflush(stdout);
 				read(0, &ctrl_key, 3);
 				sum=ctrl_key[0]+ctrl_key[1]+ctrl_key[2];
 				if(sum==UP){
-					// printf("up\n");
-					user_choice=(user_choice-1+7)%7;
+					user_choice=(user_choice-1+8)%8;
 				}else if(sum==DOWN){
-					// printf("down\n");
-					user_choice=(user_choice+1)%7;
-				}else if(sum==LEFT){
-					// printf("left\n");
-				}else if(sum==RIGHT){
-					// printf("right\n");
+					user_choice=(user_choice+1)%8;
 				}
-				// printf(" ");
 				memset(ctrl_key,0,KEYLEN);
 				printf("\r                              \r");
 				fflush(stdout);
@@ -137,10 +131,8 @@ int main(int argc, char *argv[])
 			system("stty echo");
 			tcsetattr( STDIN_FILENO, TCSANOW, &oldt);
 			//******
-			// printf("input function type:");
-			// scanf("%d", &package.type);
 			package.type=user_choice;
-
+			printf("%d\n",package.type);
 			switch(package.type){
 				case DISCONNECT:
 				case GET_NAME:
@@ -151,12 +143,31 @@ int main(int argc, char *argv[])
 					package.message_len=0; 
 					break;
 				case SEND:
+					printf("chatting mode:");
 					scanf("%s",package.buf);
 					package.message_len=strlen(package.buf);
 					break;
 				default: break;
 			}
 
+			if(package.type==RECV){
+				printf("recv called!\n");
+				// while(recv(sockfd, &package.type, sizeof(package.type), NONEBLOCK)>=0){
+					memset(&package.buf,0,sizeof(package.buf));
+					package.message_len=0;
+					recv(sockfd, &package.type, sizeof(package.type), BLOCK);
+					recv(sockfd, &package.message_len, sizeof(package.message_len), BLOCK);
+					if(package.message_len>0){
+						recv(sockfd, &package.buf, package.message_len, BLOCK);
+					}
+					if(package.message_len>0){
+						printf("recv: %s\n",package.buf);
+					}
+				// }
+				continue; //no send message step, so break.
+			}
+			
+			// printf("%d %d %s\n",package.type,package.message_len,package.buf);
 			if(send(sockfd, &package.type, sizeof(package.type), BLOCK) == -1 
 			or send(sockfd, &package.message_len, sizeof(package.message_len), BLOCK) == -1 
 			or send(sockfd, &package.buf, package.message_len, BLOCK) == -1
@@ -171,9 +182,12 @@ int main(int argc, char *argv[])
 				case GET_TIME: break;
 				default: break;
 			}
+			memset(&package.buf,0,sizeof(package.buf));
 			recv(sockfd, &package.type, sizeof(package.type), BLOCK);
 			recv(sockfd, &package.message_len, sizeof(package.message_len), BLOCK);
 			recv(sockfd, &package.buf, package.message_len, BLOCK);
+			// printf("message: %s\n",package.buf);
+			// printf("%ld\n",strlen(package.buf));
 			switch(package.type){
 				case DISCONNECT:
 					printf("%s",package.buf);
@@ -188,7 +202,6 @@ int main(int argc, char *argv[])
 					printf("client : name:%s\n",package.buf);
 					break;
 				case LIST_CONNECTER:{
-					printf("called!\n");
 					if(package.message_len==0) break;
 					char* tmp=package.buf;
 
@@ -216,6 +229,7 @@ int main(int argc, char *argv[])
 					printf("client: send status:%s\n",package.buf);
 					break;
 				case SEND:
+					printf("len: %ld\n", strlen(package.buf));
 					printf("client: receive data:%s\n",package.buf);
 					break;
 				case EXIT:
@@ -229,3 +243,17 @@ int main(int argc, char *argv[])
 	
 	return 0;
 }
+
+
+// void* receiving_message(void *arg){
+// 	thread_arg *pargs = (thread_arg *)arg;
+// 	int sockfd = pargs->sockfd;
+// 	PACKAGE recv_pac;
+// 	while (1){
+// 		recv(sockfd, &recv_pac.type, sizeof(recv_pac.type), BLOCK);
+// 		recv(sockfd, &recv_pac.message_len, sizeof(recv_pac.message_len), BLOCK);
+// 		recv(sockfd, &recv_pac.buf, recv_pac.message_len, BLOCK);
+// 		printf("receive: %s\n",recv_pac.buf);
+// 	}
+	
+// }
