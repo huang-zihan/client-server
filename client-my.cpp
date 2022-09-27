@@ -27,7 +27,7 @@
 #include <pthread.h>
 
 
-#define SERVER_PORT	4436 
+
 
 
 using namespace std;
@@ -94,6 +94,7 @@ int main(int argc, char *argv[])
 
 			// receive the welcome message
 			recv(sockfd, buf, 17, BLOCK);
+			//printf("recv1 called\n");
 			printf("%s",buf);
 			getchar();
 		}
@@ -132,7 +133,7 @@ int main(int argc, char *argv[])
 			tcsetattr( STDIN_FILENO, TCSANOW, &oldt);
 			//******
 			package.type=user_choice;
-			printf("%d\n",package.type);
+			//printf("%d\n",package.type);
 			switch(package.type){
 				case DISCONNECT:
 				case GET_NAME:
@@ -157,6 +158,7 @@ int main(int argc, char *argv[])
 					package.message_len=0;
 					recv(sockfd, &package.type, sizeof(package.type), BLOCK);
 					recv(sockfd, &package.message_len, sizeof(package.message_len), BLOCK);
+					//printf("recv2 called\n");
 					if(package.message_len>0){
 						recv(sockfd, &package.buf, package.message_len, BLOCK);
 					}
@@ -176,16 +178,12 @@ int main(int argc, char *argv[])
 				close(sockfd);
 				return -1;
 			}
-
-			switch(package.type){
-				case DISCONNECT:
-				case GET_TIME: break;
-				default: break;
-			}
 			memset(&package.buf,0,sizeof(package.buf));
 			recv(sockfd, &package.type, sizeof(package.type), BLOCK);
 			recv(sockfd, &package.message_len, sizeof(package.message_len), BLOCK);
 			recv(sockfd, &package.buf, package.message_len, BLOCK);
+			//printf("recv3 called\n");
+			printf("type=%d\n",package.type);
 			// printf("message: %s\n",package.buf);
 			// printf("%ld\n",strlen(package.buf));
 			switch(package.type){
@@ -245,15 +243,3 @@ int main(int argc, char *argv[])
 }
 
 
-// void* receiving_message(void *arg){
-// 	thread_arg *pargs = (thread_arg *)arg;
-// 	int sockfd = pargs->sockfd;
-// 	PACKAGE recv_pac;
-// 	while (1){
-// 		recv(sockfd, &recv_pac.type, sizeof(recv_pac.type), BLOCK);
-// 		recv(sockfd, &recv_pac.message_len, sizeof(recv_pac.message_len), BLOCK);
-// 		recv(sockfd, &recv_pac.buf, recv_pac.message_len, BLOCK);
-// 		printf("receive: %s\n",recv_pac.buf);
-// 	}
-	
-// }
