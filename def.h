@@ -23,6 +23,7 @@
 
 #define BLOCK 0
 #define NONEBLOCK 1
+#define SERVER_PORT	4434
 
 typedef struct package PACKAGE;
 struct package{
