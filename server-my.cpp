@@ -22,7 +22,6 @@
 
 #include <pthread.h>
 
-#define SERVER_PORT	4436 // port
 #define BLOCK 0
 
 extern int errno;
@@ -180,13 +179,14 @@ void send_msg(int fd,PACKAGE* sent)
 {
 	PACKAGE info;
 	info.type=SEND;
+	printf("data=%s\n",sent->buf);
 	char* str=sent->buf;
 	char* ip,*port,*data;
 	const char* deli=":";
 	ip=strsep(&str,deli);
 	port=strsep(&str,deli);
 	data=strsep(&str,deli);
-	printf("%s %s %s",ip,port,data);
+	printf("ip=%s port=%s data=%s",ip,port,data);
 	int i=0;
 	int destination=0;
 	for(;i<MAX_CONN;i++)
@@ -211,22 +211,32 @@ void send_msg(int fd,PACKAGE* sent)
 	strcpy(infosend.buf,data);
 	infosend.message_len=strlen(data);
 	infosend.buf[infosend.message_len]=0;
+	//printf("infosend=%s\n",infosend.buf);
 
 	PACKAGE ret_package;
 	ret_package.type=SEND;
-
-	if(send(destination,(void*)&infosend,sizeof(PACKAGE),BLOCK)<0)
+	if(send(destination,&infosend.type,sizeof(infosend.type),BLOCK)<0 ||
+	send(destination,&infosend.message_len,sizeof(infosend.message_len),BLOCK)<0 ||
+	send(destination,&infosend.buf,infosend.message_len,BLOCK)<0)
 	{
+		printf("send fail\n");
 		char tmp[]="send fail!";
 		strcpy(ret_package.buf,tmp);
 		ret_package.message_len=strlen(tmp);
-	}else{
+	}
+	else{
+		printf("send success\n");
 		char tmp[]="send success!";
 		strcpy(ret_package.buf,tmp);
 		ret_package.message_len=strlen(tmp);
 	}
-
-	send(fd,(void*)&ret_package,sizeof(PACKAGE),BLOCK);
+	printf("retpackage type=%d\n",ret_package.type);
+	if(send(fd,&ret_package.type,sizeof(ret_package.type),BLOCK)<0 ||
+	send(fd,&ret_package.message_len,sizeof(ret_package.message_len),BLOCK)<0 ||
+	send(fd,&ret_package.buf,ret_package.message_len,BLOCK)<0)
+	{
+		printf("send back fail\n");
+	}
 }
 
 
