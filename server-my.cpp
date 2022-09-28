@@ -1,10 +1,5 @@
-/*
- *	���������ҪĿ������˵��socket��̵Ļ������̣����Է�����/�ͻ��˵Ľ������̷ǳ��򵥣�
- *  ֻ���ɿͻ��������������һ��ѧ����Ϣ�Ľṹ��
- */
-
 #include <stdio.h>
-#include<stdlib.h>
+#include <stdlib.h>
 #include <errno.h>
 #include <string.h>
 #include <sys/types.h>
@@ -34,14 +29,14 @@ void show_name(int);
 void list_connecter(int);
 void send_msg(int,PACKAGE*);
 void* thread_work(void *arg);
-int main()
-{	
+int main(){	
+
 	int sockfd, comfd;
 	struct sockaddr_in serverAddr, clientAddr;
 	int iClientSize;
 	thread_arg new_arg;
-	// void *ptr; int ret;
-	// 
+	system("clear");
+	printf("%s\n\n\n",myserver);
 	if((sockfd = socket(AF_INET, SOCK_STREAM, 0)) == -1)
 	{
 		printf("socket() failed! code:%d\n", errno);
@@ -61,7 +56,6 @@ int main()
 		close(sockfd);
 		return -1;
 	}
-		
 	//
 	if(listen(sockfd, MAX_CONN) == -1)
 	{
@@ -97,8 +91,6 @@ int main()
 		new_arg.comfd=comfd;
 		new_arg.sockfd=sockfd;
 		new_arg.clientAddr=clientAddr;
-		printf("%d\n",ntohs(clientAddr.sin_port));
-		printf("%d\n",(clientAddr.sin_port));
 		pthread_create(&tid, NULL, thread_work, &new_arg);
 	}
 	close(sockfd);
@@ -111,7 +103,7 @@ void show_time(int fd){
 	PACKAGE info;
 	int *pbuf = (int *)info.buf;
 	time(&timer);
-	tblk = gmtime(&timer);
+	tblk = localtime(&timer);
 	info.type = GET_TIME;
 	*(pbuf++) = tblk->tm_year+1900;
 	*(pbuf++) = tblk->tm_mon;
@@ -202,7 +194,11 @@ void send_msg(int fd,PACKAGE* sent)
 		char tmp[]="client does not exist!";
 		strcpy(info.buf,tmp);
 		info.message_len=strlen(tmp);
-		send(fd,(void*)&info,sizeof(PACKAGE),BLOCK);
+		if(send(fd,&info.type,sizeof(info.type),BLOCK)<0
+		|| send(fd,&info.message_len,sizeof(info.message_len),BLOCK)<0
+		|| send(fd,&info.buf,info.message_len,BLOCK)<0){
+			printf("send fail\n");
+		}
 		return;
 	}
 
@@ -211,7 +207,6 @@ void send_msg(int fd,PACKAGE* sent)
 	strcpy(infosend.buf,data);
 	infosend.message_len=strlen(data);
 	infosend.buf[infosend.message_len]=0;
-	//printf("infosend=%s\n",infosend.buf);
 
 	PACKAGE ret_package;
 	ret_package.type=SEND;
@@ -239,9 +234,8 @@ void send_msg(int fd,PACKAGE* sent)
 	}
 }
 
-
 void* thread_work(void *arg){
-	// the child continue to connect server
+	// the new thread continue to connect server
 	int ret;
 	void *ptr;
 	int connect_flag=1;
@@ -251,8 +245,8 @@ void* thread_work(void *arg){
 	int ret_value=0;
 	send(comfd, "client: hello!\n", 16, BLOCK);
 	PACKAGE package;
-	memset((void*)&package,0,sizeof(PACKAGE));
 	while(connect_flag){
+		memset((void*)&package,0,sizeof(PACKAGE));
 		ret = recv(comfd, &package.type, sizeof(package.type), BLOCK);
 		ret += recv(comfd, &package.message_len, sizeof(package.message_len), BLOCK);
 		if(package.message_len>0){
@@ -265,9 +259,6 @@ void* thread_work(void *arg){
 			ret_value=-1;
 			return NULL;
 		}
-		// printf("recved!\n");
-		// printf("%d %d\n",package.type,package.message_len);
-		// printf("%s\n", package.buf);
 		if(package.type==DISCONNECT){
 			package.message_len=19;
 			memcpy(&package.buf,"client: good bye!\n",package.message_len);
@@ -286,7 +277,6 @@ void* thread_work(void *arg){
 		}
 
 		// response
-		printf("279\n");
 		switch (package.type){
 			case GET_TIME:
 				show_time(comfd);
@@ -298,7 +288,6 @@ void* thread_work(void *arg){
 				list_connecter(comfd);
 				break;
 			case SEND:
-				printf("!!\n");
 				send_msg(comfd,&package);
 				break;
 			case EXIT:

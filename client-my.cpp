@@ -1,8 +1,3 @@
-/*
- *	���������ҪĿ������˵��socket��̵Ļ������̣����Է�����/�ͻ��˵Ľ������̷ǳ��򵥣�
- *  ֻ���ɿͻ��������������һ��ѧ����Ϣ�Ľṹ��
- */
-//informLinuxClient.cpp������Ϊ serverIP name age
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
@@ -25,27 +20,12 @@
 #include <iostream>
 
 #include <pthread.h>
-
-
-
-
+#include <fcntl.h>
 
 using namespace std;
 
 extern int errno;
-
-const char* menu[8]={
-	"CONNECT",
-	"DISCONNECT",
-	"GET_TIME",
-	"GET_NAME",
-	"LIST_CONNECTER",
-	"SEND",
-	"EXIT",
-	"RECV"
-};
-
-
+extern const char* menu[8];
 char buf[128];
 
 
@@ -53,7 +33,8 @@ int main(int argc, char *argv[])
 {	
 	int sockfd, connect_flag=0;
 	struct sockaddr_in serverAddr;
-	
+	system("clear");
+	printf("%s\n\n\n",myclient);
 	while(1){
 		int type;
 		//connect to a server
@@ -94,7 +75,6 @@ int main(int argc, char *argv[])
 
 			// receive the welcome message
 			recv(sockfd, buf, 17, BLOCK);
-			//printf("recv1 called\n");
 			printf("%s",buf);
 			getchar();
 		}
@@ -102,7 +82,6 @@ int main(int argc, char *argv[])
 		else{
 			PACKAGE package;
 			package.message_len=0;
-			//******
 			// set terminal
 			static struct termios oldt, newt;
 			char ctrl_key[KEYLEN];
@@ -112,6 +91,7 @@ int main(int argc, char *argv[])
 			newt.c_lflag &= ~(ICANON);         // c_lflag 本地模式
 			tcsetattr( STDIN_FILENO, TCSANOW, &newt);
 			system("stty -echo");
+			//
 			int sum;
 			printf("%s\n",menu_head);
 			do{
@@ -131,9 +111,8 @@ int main(int argc, char *argv[])
 			puts("");		
 			system("stty echo");
 			tcsetattr( STDIN_FILENO, TCSANOW, &oldt);
-			//******
+			//unset terminal
 			package.type=user_choice;
-			//printf("%d\n",package.type);
 			switch(package.type){
 				case DISCONNECT:
 				case GET_NAME:
@@ -144,32 +123,33 @@ int main(int argc, char *argv[])
 					package.message_len=0; 
 					break;
 				case SEND:
-					printf("chatting mode:");
-					scanf("%s",package.buf);
+					printf("chatting mode:\n");
+					scanf("%[^\n]",package.buf);
 					package.message_len=strlen(package.buf);
 					break;
 				default: break;
 			}
 
 			if(package.type==RECV){
-				printf("recv called!\n");
-				// while(recv(sockfd, &package.type, sizeof(package.type), NONEBLOCK)>=0){
+				int flags;
+				flags = fcntl(sockfd, F_GETFL, 0);				
+				fcntl(sockfd, F_SETFL, flags | O_NONBLOCK);		//set noneblock
+				while(recv(sockfd, &package.type, sizeof(package.type), BLOCK)>=0){
 					memset(&package.buf,0,sizeof(package.buf));
 					package.message_len=0;
-					recv(sockfd, &package.type, sizeof(package.type), BLOCK);
 					recv(sockfd, &package.message_len, sizeof(package.message_len), BLOCK);
-					//printf("recv2 called\n");
 					if(package.message_len>0){
 						recv(sockfd, &package.buf, package.message_len, BLOCK);
 					}
 					if(package.message_len>0){
 						printf("recv: %s\n",package.buf);
 					}
-				// }
+				}
+				flags  = fcntl(sockfd,F_GETFL,0);
+				fcntl(sockfd,F_SETFL,flags&~O_NONBLOCK);		//set block
 				continue; //no send message step, so break.
 			}
 			
-			// printf("%d %d %s\n",package.type,package.message_len,package.buf);
 			if(send(sockfd, &package.type, sizeof(package.type), BLOCK) == -1 
 			or send(sockfd, &package.message_len, sizeof(package.message_len), BLOCK) == -1 
 			or send(sockfd, &package.buf, package.message_len, BLOCK) == -1
@@ -182,10 +162,7 @@ int main(int argc, char *argv[])
 			recv(sockfd, &package.type, sizeof(package.type), BLOCK);
 			recv(sockfd, &package.message_len, sizeof(package.message_len), BLOCK);
 			recv(sockfd, &package.buf, package.message_len, BLOCK);
-			//printf("recv3 called\n");
-			printf("type=%d\n",package.type);
-			// printf("message: %s\n",package.buf);
-			// printf("%ld\n",strlen(package.buf));
+
 			switch(package.type){
 				case DISCONNECT:
 					printf("%s",package.buf);
@@ -235,7 +212,6 @@ int main(int argc, char *argv[])
 					exit(0);
 					break;
 			}
-			// close(sockfd); //
 		}
 	}
 	
