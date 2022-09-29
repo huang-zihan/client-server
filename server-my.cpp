@@ -106,12 +106,11 @@ void show_time(int fd){
 	tblk = localtime(&timer);
 	info.type = GET_TIME;
 	*(pbuf++) = tblk->tm_year+1900;
-	*(pbuf++) = tblk->tm_mon;
+	*(pbuf++) = tblk->tm_mon + 1;
 	*(pbuf++) = tblk->tm_mday;
 	*(pbuf++) = tblk->tm_hour;
 	*(pbuf++) = tblk->tm_min;
 	*(pbuf++) = tblk->tm_sec;
-	pbuf-=6;
 	info.message_len=6*sizeof(int);
 	send(fd,&info.type,sizeof(info.type),BLOCK);
 	send(fd,&info.message_len,sizeof(info.message_len),BLOCK);
